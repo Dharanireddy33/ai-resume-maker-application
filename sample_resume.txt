@@ -1,0 +1,16 @@
+SAI RUDHRATEJA REDDY CH
+Computer Science Engineering – Artificial Intelligence & Machine Learning
+sai.reddy@example.com | +91 98765 43210 | Tamil Nadu, India
+
+EDUCATION
+B.Tech – Computer Science Engineering (AI & ML), Kalasalingam University | 2024–2028
+
+SKILLS
+Python, JavaScript, C++, React.js, Node.js, Machine Learning, SQL, Git, ESP32
+
+PROJECTS
+AI-Based Park Location Prediction System — analyzed population, open land, road access, green cover, pollution and geographic data to rank suitable park locations.
+
+EmotionVerse AI — explored facial expression, ECG and GSR signals with ESP32 and machine learning for emotion classification.
+
+Battery Health Prediction System — built ML models to estimate battery health and remaining useful life.
