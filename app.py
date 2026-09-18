@@ -2,7 +2,7 @@ import hashlib, io, json, re, secrets
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 import streamlit as st
-from openai import OpenAI
+from google import genai
 from pypdf import PdfReader
 from docx import Document
 
@@ -22,8 +22,8 @@ if 'auth_mode' not in st.session_state: st.session_state.auth_mode='login'
 if 'oauth_state' not in st.session_state: st.session_state.oauth_state=secrets.token_urlsafe(24)
 
 def key():
-    try: return st.secrets.get('OPENAI_API_KEY','')
-    except Exception: return ''
+    value=secret_value('GEMINI_API_KEY').strip()
+    return '' if not value or value.startswith('YOUR_') else value
 
 def secret_value(name):
     try: return st.secrets.get(name, '')
@@ -63,9 +63,15 @@ def close_login_page():
 complete_google_login()
 
 def ai(prompt, system='You are an expert resume and career assistant.'):
-    if not key(): return ''
-    r=OpenAI(api_key=key()).responses.create(model='gpt-5-mini', instructions=system, input=prompt)
-    return r.output_text.strip()
+    api_key=key()
+    if not api_key: return ''
+    try:
+        client=genai.Client(api_key=api_key)
+        response=client.models.generate_content(model='gemini-2.5-flash', contents=f'{system}\n\n{prompt}')
+        return (response.text or '').strip()
+    except Exception as error:
+        st.error(f'Gemini API error: {error}')
+        return ''
 
 def extract(f):
     if not f: return ''
