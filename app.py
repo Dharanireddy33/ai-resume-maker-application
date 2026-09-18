@@ -16,6 +16,7 @@ st.markdown('''<style>
 if 'plan' not in st.session_state: st.session_state.plan='Free'
 if 'logged_in' not in st.session_state: st.session_state.logged_in=False
 if 'page' not in st.session_state: st.session_state.page='Dashboard'
+if 'nav_page' not in st.session_state: st.session_state.nav_page='Dashboard'
 if 'users' not in st.session_state: st.session_state.users={}
 if 'auth_mode' not in st.session_state: st.session_state.auth_mode='login'
 if 'oauth_state' not in st.session_state: st.session_state.oauth_state=secrets.token_urlsafe(24)
@@ -55,6 +56,9 @@ def complete_google_login():
         st.rerun()
     except Exception as error:
         st.session_state.google_error=f'Google sign-in failed: {error}'
+
+def close_login_page():
+    st.session_state.page=st.session_state.nav_page
 
 complete_google_login()
 
@@ -99,7 +103,8 @@ with st.sidebar:
     if st.button('Login', use_container_width=True):
         st.session_state.page='Login'
         st.rerun()
-    page=st.radio('Navigation',['Dashboard','Login','Resume Maker','ATS Analyzer','Job Matcher','Cover Letter','Application Assistant','Interview Prep'],key='page')
+    nav_page=st.radio('Navigation',['Dashboard','Resume Maker','ATS Analyzer','Job Matcher','Cover Letter','Application Assistant','Interview Prep'],key='nav_page',on_change=close_login_page)
+    page='Login' if st.session_state.page=='Login' else nav_page
     st.divider()
     if st.session_state.logged_in:
         st.caption(f"Signed in as {st.session_state.get('user_email','user')}")
