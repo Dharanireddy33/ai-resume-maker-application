@@ -1,4 +1,6 @@
-import io, json, re
+import hashlib, io, json, re, secrets
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 import streamlit as st
 from openai import OpenAI
 from pypdf import PdfReader
@@ -14,10 +16,47 @@ st.markdown('''<style>
 if 'plan' not in st.session_state: st.session_state.plan='Free'
 if 'logged_in' not in st.session_state: st.session_state.logged_in=False
 if 'page' not in st.session_state: st.session_state.page='Dashboard'
+if 'users' not in st.session_state: st.session_state.users={}
+if 'auth_mode' not in st.session_state: st.session_state.auth_mode='login'
+if 'oauth_state' not in st.session_state: st.session_state.oauth_state=secrets.token_urlsafe(24)
 
 def key():
     try: return st.secrets.get('OPENAI_API_KEY','')
     except Exception: return ''
+
+def secret_value(name):
+    try: return st.secrets.get(name, '')
+    except Exception: return ''
+
+def password_hash(password):
+    return hashlib.sha256(password.encode('utf-8')).hexdigest()
+
+def google_configured():
+    return bool(secret_value('GOOGLE_CLIENT_ID') and secret_value('GOOGLE_CLIENT_SECRET'))
+
+def google_login_url():
+    redirect_uri=secret_value('GOOGLE_REDIRECT_URI') or 'http://localhost:8501/'
+    query=urlencode({'client_id':secret_value('GOOGLE_CLIENT_ID'),'redirect_uri':redirect_uri,'response_type':'code','scope':'openid email profile','state':st.session_state.oauth_state,'access_type':'offline','prompt':'select_account'})
+    return f'https://accounts.google.com/o/oauth2/v2/auth?{query}'
+
+def complete_google_login():
+    code=st.query_params.get('code')
+    state=st.query_params.get('state')
+    if not code or state != st.session_state.oauth_state or not google_configured(): return
+    redirect_uri=secret_value('GOOGLE_REDIRECT_URI') or 'http://localhost:8501/'
+    payload=urlencode({'code':code,'client_id':secret_value('GOOGLE_CLIENT_ID'),'client_secret':secret_value('GOOGLE_CLIENT_SECRET'),'redirect_uri':redirect_uri,'grant_type':'authorization_code'}).encode()
+    try:
+        token_data=json.loads(urlopen(Request('https://oauth2.googleapis.com/token',data=payload,headers={'Content-Type':'application/x-www-form-urlencoded'}),timeout=10).read())
+        profile=json.loads(urlopen(Request('https://openidconnect.googleapis.com/v1/userinfo',headers={'Authorization':f"Bearer {token_data['access_token']}"}),timeout=10).read())
+        st.session_state.logged_in=True
+        st.session_state.user_email=profile.get('email','Google user')
+        st.session_state.page='Dashboard'
+        st.query_params.clear()
+        st.rerun()
+    except Exception as error:
+        st.session_state.google_error=f'Google sign-in failed: {error}'
+
+complete_google_login()
 
 def ai(prompt, system='You are an expert resume and career assistant.'):
     if not key(): return ''
@@ -62,7 +101,14 @@ with st.sidebar:
         st.rerun()
     page=st.radio('Navigation',['Dashboard','Login','Resume Maker','ATS Analyzer','Job Matcher','Cover Letter','Application Assistant','Interview Prep'],key='page')
     st.divider()
-    st.caption('Signed in' if st.session_state.logged_in else 'Guest session')
+    if st.session_state.logged_in:
+        st.caption(f"Signed in as {st.session_state.get('user_email','user')}")
+        if st.button('Sign out', use_container_width=True):
+            st.session_state.logged_in=False
+            st.session_state.page='Login'
+            st.rerun()
+    else:
+        st.caption('Guest session')
     if key():
         st.success('AI API configured')
     else:
@@ -72,26 +118,58 @@ st.markdown('<div class="main-title">AI Resume & Application Assistant</div>',un
 st.markdown('<div class="subtitle">Create • Analyze • Match • Apply • Prepare</div>',unsafe_allow_html=True)
 
 if page=='Login':
+    if st.session_state.get('google_error'):
+        st.error(st.session_state.pop('google_error'))
     left, right=st.columns(2, gap='large')
     with left:
-        st.markdown('<div class="login-form"><h1>Login</h1><hr class="login-rule"></div>', unsafe_allow_html=True)
-        with st.form('login'):
+        title='Create account' if st.session_state.auth_mode=='signup' else 'Login'
+        st.markdown(f'<div class="login-form"><h1>{title}</h1><hr class="login-rule"></div>', unsafe_allow_html=True)
+        with st.form('auth'):
             email=st.text_input('Email Address / Mobile Number', placeholder='you@example.com')
             password=st.text_input('Password', type='password')
-            submitted=st.form_submit_button('LOGIN', use_container_width=True)
-        st.markdown('<div class="login-footer">You don\'t have an account? <b>SIGN UP</b></div>', unsafe_allow_html=True)
+            confirm=st.text_input('Confirm Password', type='password') if st.session_state.auth_mode=='signup' else ''
+            submitted=st.form_submit_button('SIGN UP' if st.session_state.auth_mode=='signup' else 'LOGIN', use_container_width=True)
+        if st.session_state.auth_mode=='signup':
+            if st.button('Back to Login', use_container_width=True):
+                st.session_state.auth_mode='login'
+                st.rerun()
+        elif st.button("You don't have an account? SIGN UP", use_container_width=True):
+            st.session_state.auth_mode='signup'
+            st.rerun()
+        if google_configured():
+            st.link_button('Continue with Google', google_login_url(), use_container_width=True)
+        else:
+            if st.button('Continue with Google', use_container_width=True):
+                st.warning('Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to .streamlit/secrets.toml to enable Google sign-in.')
     with right:
         st.markdown('<div class="login-panel"><h2>WELCOME</h2><p>Let\'s get started</p></div>', unsafe_allow_html=True)
         st.markdown('<div style="padding-top:1rem"><b>Choose your workspace plan</b><br><span class="login-muted">You can change this later from the dashboard.</span></div>', unsafe_allow_html=True)
         selected_plan=st.selectbox('Plan', ['Free','Pro','Premium'], label_visibility='collapsed')
     if submitted:
-        if email and password:
+        normalized_email=email.strip().lower()
+        if not normalized_email or not password:
+            st.warning('Enter an email address and password to continue.')
+        elif st.session_state.auth_mode=='signup':
+            if password != confirm:
+                st.error('Passwords do not match.')
+            elif normalized_email in st.session_state.users:
+                st.error('An account with this email already exists. Please log in.')
+            else:
+                st.session_state.users[normalized_email]=password_hash(password)
+                st.session_state.logged_in=True
+                st.session_state.user_email=normalized_email
+                st.session_state.plan=selected_plan
+                st.session_state.auth_mode='login'
+                st.session_state.page='Dashboard'
+                st.rerun()
+        elif st.session_state.users.get(normalized_email) != password_hash(password):
+            st.error('Incorrect email or password. Sign up first if you are new here.')
+        else:
             st.session_state.logged_in=True
+            st.session_state.user_email=normalized_email
             st.session_state.plan=selected_plan
             st.session_state.page='Dashboard'
             st.rerun()
-        else:
-            st.warning('Enter an email address and password to continue.')
 
 elif page=='Dashboard':
     st.markdown(f'''<div class="dash-hero"><div class="eyebrow">Your career workspace</div><h1>Move from application to offer.</h1><p>Build a stronger resume, tailor every application, and prepare with confidence.</p></div>''',unsafe_allow_html=True)

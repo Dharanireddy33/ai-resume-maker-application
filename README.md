@@ -20,6 +20,20 @@ Optional local secret: create `.streamlit/secrets.toml`:
 OPENAI_API_KEY = "your_api_key_here"
 ```
 
+To enable **Continue with Google**, create a Google OAuth Web application in
+Google Cloud Console and add these values to the same secrets file. Add
+`http://localhost:8501/` as an authorized redirect URI:
+
+```toml
+GOOGLE_CLIENT_ID = "your-google-client-id"
+GOOGLE_CLIENT_SECRET = "your-google-client-secret"
+GOOGLE_REDIRECT_URI = "http://localhost:8501/"
+```
+
+Email/password sign-up and login work locally for the current Streamlit
+session. A production deployment should replace the session store with a
+database and server-side authentication provider.
+
 Never commit that file.
 
 ## Deploy to Streamlit Community Cloud
