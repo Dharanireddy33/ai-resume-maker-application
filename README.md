@@ -17,7 +17,7 @@ streamlit run app.py
 Optional local secret: create `.streamlit/secrets.toml`:
 
 ```toml
-GEMINI_API_KEY = "your_gemini_api_key_here"
+GOOGLE_API_KEY = "your_gemini_api_key_here"
 ```
 
 To enable **Continue with Google**, create a Google OAuth Web application in
@@ -55,5 +55,5 @@ The app will get a `streamlit.app` URL.
 ## Notes
 
 - The app works in fallback mode without an API key, using local keyword analysis and templates.
-- AI features use the Google Gemini API with the `google-genai` SDK.
+- AI features use the Google Gemini API with the `google-genai` SDK. The app accepts `GOOGLE_API_KEY` or `GEMINI_API_KEY`.
 - Do not put API keys in Python source code or GitHub.

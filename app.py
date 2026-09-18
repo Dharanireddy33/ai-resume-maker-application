@@ -22,7 +22,7 @@ if 'auth_mode' not in st.session_state: st.session_state.auth_mode='login'
 if 'oauth_state' not in st.session_state: st.session_state.oauth_state=secrets.token_urlsafe(24)
 
 def key():
-    value=secret_value('GEMINI_API_KEY').strip()
+    value=(secret_value('GOOGLE_API_KEY') or secret_value('GEMINI_API_KEY')).strip()
     return '' if not value or value.startswith('YOUR_') else value
 
 def secret_value(name):
